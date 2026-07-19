@@ -1,0 +1,47 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "ZWormHole",
+  "version": "0.1.0",
+  "identifier": "com.zwormhole.app",
+  "build": {
+    "beforeDevCommand": "pnpm dev",
+    "devUrl": "http://localhost:1420",
+    "beforeBuildCommand": "pnpm build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "ZWormHole",
+        "width": 996,
+        "height": 697,
+        "minWidth": 760,
+        "minHeight": 460,
+        "center": true,
+        "decorations": false
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "publisher": "TheHolyOneZ",
+    "homepage": "https://zsync.eu/zwormhole/",
+    "license": "GPL-3.0-only",
+    "copyright": "Copyright © 2026 TheHolyOneZ. Licensed under GPL-3.0-only.",
+    "category": "Utility",
+    "shortDescription": "LAN-first encrypted P2P file transfer",
+    "longDescription": "ZWormHole is a LAN-first, encrypted peer-to-peer file transfer app: pair devices with a confirm code, then send files, folders, and text directly over an authenticated Noise-over-QUIC channel — no relay server, no cloud.",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ]
+  }
+}
