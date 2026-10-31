@@ -44,7 +44,10 @@
       "icons/icon.ico"
     ],
     "iOS": {
-      "minimumSystemVersion": "14.0"
+      "minimumSystemVersion": "14.0",
+      "frameworks": [
+        "SystemConfiguration"
+      ]
     },
     "android": {
       "minSdkVersion": 24
