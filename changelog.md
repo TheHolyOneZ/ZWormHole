@@ -46,6 +46,7 @@ ZWormHole now runs on **Android** and **iPhone/iPad** — same app, same code ba
 
 ### Fixes
 
+- **About showed a hard-coded version number.** It now reads the real app version, so it can't fall out of date again.
 - **"Run in background" survived only until restart.** The setting is now saved and restored on launch, on every platform.
 - **Errors showed as `[object Object]`** in history, connection-test, incoming-transfer and device-info messages. They now show the real reason.
 - **Avatars in WebP, GIF or BMP failed to load** even though the picker offered them. These formats now decode correctly.

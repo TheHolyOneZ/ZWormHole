@@ -1,10 +1,11 @@
-import type { ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
+import { getVersion } from "@tauri-apps/api/app";
 import { openExternal } from "../ipc/commands";
 import { describeError } from "../lib/errors";
 import { useAppStore } from "../state/store";
 import { WormholeMark } from "./WormholeMark";
 
-const VERSION = "0.1.0";
+const FALLBACK_VERSION = "0.2.0";
 
 
 const svg = {
@@ -135,6 +136,13 @@ const STACK: { icon: ReactNode; label: string; value: string }[] = [
 
 export function AboutPane() {
   const pushToast = useAppStore((s) => s.pushToast);
+  const [version, setVersion] = useState(FALLBACK_VERSION);
+
+  useEffect(() => {
+    getVersion()
+      .then(setVersion)
+      .catch(() => {});
+  }, []);
 
   async function open(url: string) {
     try {
@@ -152,7 +160,7 @@ export function AboutPane() {
         <div className="about__hero-text">
           <div className="about__name-row">
             <h2 className="about__name">ZWormHole</h2>
-            <span className="about__ver">v{VERSION}</span>
+            <span className="about__ver">v{version}</span>
           </div>
           <p className="about__tagline">
             LAN-first, end-to-end encrypted peer-to-peer file transfer. No relay, no cloud — your

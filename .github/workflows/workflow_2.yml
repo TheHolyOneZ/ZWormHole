@@ -6,7 +6,7 @@ on:
       release_tag:
         description: "Release tag to upload the binaries to (must already exist)"
         required: false
-        default: "0.1.0"
+        default: "0.2.0"
   push:
     branches: [main, master]
     paths:
@@ -32,7 +32,7 @@ env:
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: short
 
-  RELEASE_TAG: ${{ github.event.inputs.release_tag || '0.1.0' }}
+  RELEASE_TAG: ${{ github.event.inputs.release_tag || '0.2.0' }}
 
   COREPACK_ENABLE_AUTO_PIN: "0"
   COREPACK_ENABLE_STRICT: "0"
