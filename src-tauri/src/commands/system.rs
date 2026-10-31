@@ -1,10 +1,15 @@
-
+use tauri::AppHandle;
 
 use crate::error::{AppError, AppResult};
-
+use crate::platform::{self, PlatformInfo};
 
 #[tauri::command]
-pub fn open_external_url(url: String) -> AppResult<()> {
+pub fn platform_info() -> PlatformInfo {
+    platform::info()
+}
+
+#[tauri::command]
+pub async fn open_external_url(app: AppHandle, url: String) -> AppResult<()> {
     if !url.starts_with("https://") {
         return Err(AppError::new("refusing to open a non-https URL"));
     }
@@ -13,18 +18,8 @@ pub fn open_external_url(url: String) -> AppResult<()> {
     {
         return Err(AppError::new("URL contains characters that aren't allowed"));
     }
-    open_url_native(&url)
+    platform::open_url(&app, &url).await
 }
-
-#[cfg(target_os = "linux")]
-fn open_url_native(url: &str) -> AppResult<()> {
-    std::process::Command::new("xdg-open")
-        .arg(url)
-        .spawn()
-        .map(|_| ())
-        .map_err(|e| AppError::new(format!("failed to launch xdg-open: {e}")))
-}
-
 
 #[tauri::command]
 pub fn save_text_file(path: String, contents: String) -> AppResult<()> {
@@ -32,106 +27,71 @@ pub fn save_text_file(path: String, contents: String) -> AppResult<()> {
         .map_err(|e| AppError::new(format!("failed to write {path}: {e}")))
 }
 
-
 #[tauri::command]
-pub fn open_path(path: String) -> AppResult<()> {
+pub async fn open_path(app: AppHandle, path: String) -> AppResult<()> {
     if !std::path::Path::new(&path).exists() {
         return Err(AppError::new("that file no longer exists on disk"));
     }
-    open_path_native(&path)
+    platform::open_path(&app, &path).await
 }
-
 
 #[tauri::command]
-pub fn reveal_path(path: String) -> AppResult<()> {
-    let p = std::path::Path::new(&path);
-    if !p.exists() {
+pub async fn reveal_path(app: AppHandle, path: String) -> AppResult<()> {
+    if !std::path::Path::new(&path).exists() {
         return Err(AppError::new("that file no longer exists on disk"));
     }
-    reveal_path_native(&path)
+    platform::reveal_path(&app, &path).await
 }
 
-#[cfg(target_os = "linux")]
-fn open_path_native(path: &str) -> AppResult<()> {
-    std::process::Command::new("xdg-open")
-        .arg(path)
-        .spawn()
-        .map(|_| ())
-        .map_err(|e| AppError::new(format!("failed to open file: {e}")))
+#[tauri::command]
+pub async fn pick_files(app: AppHandle, images: Option<bool>) -> AppResult<Vec<String>> {
+    platform::pick_files(&app, images.unwrap_or(false)).await
 }
 
-#[cfg(target_os = "linux")]
-fn reveal_path_native(path: &str) -> AppResult<()> {
-
-    let dir = std::path::Path::new(path)
-        .parent()
-        .map(|p| p.to_path_buf())
-        .unwrap_or_else(|| std::path::PathBuf::from("."));
-    std::process::Command::new("xdg-open")
-        .arg(dir)
-        .spawn()
-        .map(|_| ())
-        .map_err(|e| AppError::new(format!("failed to open folder: {e}")))
+#[tauri::command]
+pub async fn pick_folder(app: AppHandle) -> AppResult<Option<String>> {
+    platform::pick_folder(&app).await
 }
 
-#[cfg(target_os = "macos")]
-fn open_path_native(path: &str) -> AppResult<()> {
-    std::process::Command::new("open")
-        .arg(path)
-        .spawn()
-        .map(|_| ())
-        .map_err(|e| AppError::new(format!("failed to open file: {e}")))
+#[tauri::command]
+pub async fn pick_save_dir(app: AppHandle, persist: Option<bool>) -> AppResult<Option<String>> {
+    let Some(dir) = platform::pick_save_dir(&app, persist.unwrap_or(true)).await? else {
+        return Ok(None);
+    };
+    platform::ensure_writable_dir(std::path::Path::new(&dir))?;
+    Ok(Some(dir))
 }
 
-#[cfg(target_os = "macos")]
-fn reveal_path_native(path: &str) -> AppResult<()> {
-    std::process::Command::new("open")
-        .args(["-R", path])
-        .spawn()
-        .map(|_| ())
-        .map_err(|e| AppError::new(format!("failed to reveal file: {e}")))
+fn export_name(name: &str) -> String {
+    let cleaned: String = name
+        .chars()
+        .map(|c| if "/\\:*?\"<>|".contains(c) || c.is_control() { '_' } else { c })
+        .collect();
+    let cleaned = cleaned.trim().to_string();
+    if cleaned.is_empty() {
+        "export.txt".to_string()
+    } else {
+        cleaned
+    }
 }
 
-#[cfg(target_os = "windows")]
-fn open_path_native(path: &str) -> AppResult<()> {
-    use std::os::windows::process::CommandExt;
-
-
-    std::process::Command::new("cmd")
-        .raw_arg(format!("/C start \"\" \"{path}\""))
-        .spawn()
-        .map(|_| ())
-        .map_err(|e| AppError::new(format!("failed to open file: {e}")))
-}
-
-#[cfg(target_os = "windows")]
-fn reveal_path_native(path: &str) -> AppResult<()> {
-    use std::os::windows::process::CommandExt;
-
-
-    std::process::Command::new("explorer")
-        .raw_arg(format!("/select,\"{path}\""))
-        .spawn()
-        .map(|_| ())
-        .map_err(|e| AppError::new(format!("failed to reveal file: {e}")))
-}
-
-#[cfg(target_os = "macos")]
-fn open_url_native(url: &str) -> AppResult<()> {
-    std::process::Command::new("open")
-        .arg(url)
-        .spawn()
-        .map(|_| ())
-        .map_err(|e| AppError::new(format!("failed to launch open: {e}")))
-}
-
-#[cfg(target_os = "windows")]
-fn open_url_native(url: &str) -> AppResult<()> {
-
-
-    std::process::Command::new("cmd")
-        .args(["/C", "start", "", url])
-        .spawn()
-        .map(|_| ())
-        .map_err(|e| AppError::new(format!("failed to launch start: {e}")))
+#[tauri::command]
+pub async fn export_text_file(
+    app: AppHandle,
+    file_name: String,
+    contents: String,
+    mime: Option<String>,
+) -> AppResult<bool> {
+    let dir = platform::new_import_dir(&app)?;
+    let source = dir.join(export_name(&file_name));
+    std::fs::write(&source, contents.as_bytes())
+        .map_err(|e| AppError::new(format!("failed to prepare export: {e}")))?;
+    let result = platform::export_file(
+        &app,
+        source,
+        mime.as_deref().unwrap_or("text/plain"),
+    )
+    .await;
+    let _ = std::fs::remove_dir_all(&dir);
+    result
 }

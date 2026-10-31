@@ -1,3 +1,4 @@
+#[cfg(not(target_os = "ios"))]
 use mdns_sd::ServiceDaemon;
 use tauri::{AppHandle, Manager, State};
 use uuid::Uuid;
@@ -12,16 +13,24 @@ use crate::state::AppState;
 use crate::transport::endpoint as transport_endpoint;
 
 pub fn local_display_name() -> String {
-    gethostname::gethostname()
-        .into_string()
-        .unwrap_or_else(|_| "ZWormHole Device".to_string())
+    crate::platform::device_name()
 }
-
 
 pub fn effective_local_name(app: &AppHandle) -> String {
     app.try_state::<crate::profile::MyProfileStore>()
         .and_then(|s| s.display_name_override())
         .unwrap_or_else(local_display_name)
+}
+
+#[cfg(not(target_os = "ios"))]
+fn shared_daemon(discovery: &mut crate::state::DiscoveryState) -> AppResult<ServiceDaemon> {
+    if let Some(d) = &discovery.daemon {
+        return Ok(d.clone());
+    }
+    let d = ServiceDaemon::new()
+        .map_err(|e| crate::error::AppError::new(format!("mDNS daemon init failed: {e}")))?;
+    discovery.daemon = Some(d.clone());
+    Ok(d)
 }
 
 #[tauri::command]
@@ -38,42 +47,48 @@ pub async fn become_visible(app: AppHandle, state: State<'_, AppState>) -> AppRe
 
     let mut discovery = state.discovery.lock().await;
 
-    let daemon = match &discovery.daemon {
-        Some(d) => d.clone(),
-        None => {
-            let d = ServiceDaemon::new()
-                .map_err(|e| crate::error::AppError::new(format!("mDNS daemon init failed: {e}")))?;
-            discovery.daemon = Some(d.clone());
-            d
-        }
-    };
-
     let identity = app.state::<DeviceIdentity>();
     let info = LocalDeviceInfo {
         display_name: effective_local_name(&app),
-
-
         session_id: Uuid::new_v4().to_string(),
         fingerprint: identity.fingerprint(),
         port,
     };
 
-    let fullname = service::advertise(&daemon, &info)?;
+    #[cfg(target_os = "ios")]
+    let fullname = {
+        let name = service::instance_name(&info);
+        crate::platform::bonjour::publish(&app, &name, info.port, &service::txt_properties(&info))?;
+        format!("{name}.{}", service::SERVICE_TYPE)
+    };
+    #[cfg(not(target_os = "ios"))]
+    let fullname = service::advertise(&shared_daemon(&mut discovery)?, &info)?;
+
     discovery.own_fullname = Some(fullname);
 
     Ok(())
 }
 
 #[tauri::command]
-pub async fn stop_visible(state: State<'_, AppState>) -> AppResult<()> {
+pub async fn stop_visible(app: AppHandle, state: State<'_, AppState>) -> AppResult<()> {
     let mut discovery = state.discovery.lock().await;
 
-    let (Some(daemon), Some(fullname)) = (discovery.daemon.clone(), discovery.own_fullname.take())
-    else {
+    let Some(fullname) = discovery.own_fullname.take() else {
         return Ok(());
     };
 
-    service::stop_advertising(&daemon, &fullname)?;
+    #[cfg(target_os = "ios")]
+    {
+        let _ = &fullname;
+        crate::platform::bonjour::unpublish(&app)?;
+    }
+    #[cfg(not(target_os = "ios"))]
+    {
+        let _ = &app;
+        if let Some(daemon) = discovery.daemon.clone() {
+            service::stop_advertising(&daemon, &fullname)?;
+        }
+    }
     Ok(())
 }
 
@@ -85,28 +100,32 @@ pub async fn start_browsing(app: AppHandle, state: State<'_, AppState>) -> AppRe
         return Ok(());
     }
 
-    let daemon = match &discovery.daemon {
-        Some(d) => d.clone(),
-        None => {
-            let d = ServiceDaemon::new()
-                .map_err(|e| crate::error::AppError::new(format!("mDNS daemon init failed: {e}")))?;
-            discovery.daemon = Some(d.clone());
-            d
-        }
-    };
-
-    let receiver = service::browse(&daemon)?;
-    discovery.browse_task = Some(bridge::spawn_bridge(app, receiver));
+    #[cfg(target_os = "ios")]
+    {
+        crate::platform::bonjour::browse(&app)?;
+        discovery.browse_task = Some(bridge::spawn_bonjour_bridge(app));
+    }
+    #[cfg(not(target_os = "ios"))]
+    {
+        let receiver = service::browse(&shared_daemon(&mut discovery)?)?;
+        discovery.browse_task = Some(bridge::spawn_bridge(app, receiver));
+    }
 
     Ok(())
 }
 
 #[tauri::command]
-pub async fn stop_browsing(state: State<'_, AppState>) -> AppResult<()> {
+pub async fn stop_browsing(app: AppHandle, state: State<'_, AppState>) -> AppResult<()> {
     let mut discovery = state.discovery.lock().await;
 
-    if let Some(daemon) = discovery.daemon.clone() {
-        service::stop_browsing(&daemon)?;
+    #[cfg(target_os = "ios")]
+    crate::platform::bonjour::stop_browse(&app)?;
+    #[cfg(not(target_os = "ios"))]
+    {
+        let _ = &app;
+        if let Some(daemon) = discovery.daemon.clone() {
+            service::stop_browsing(&daemon)?;
+        }
     }
     if let Some(task) = discovery.browse_task.take() {
         task.abort();

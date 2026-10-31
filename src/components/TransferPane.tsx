@@ -14,6 +14,7 @@ import { ContextMenu } from "./ContextMenu";
 import { WormholeMark } from "./WormholeMark";
 import type { TransferJob } from "../types/transfer";
 import type { PersistedJob } from "../types/resumable";
+import { supportsDragDrop } from "../lib/platform";
 
 function TransferRow({
   job,
@@ -279,8 +280,8 @@ export function TransferPane({ deviceKey }: { deviceKey?: string } = {}) {
             <li>
               <span className="hero__step-index">3</span>
               <span className="hero__step-text">
-                Hit <strong>Send files</strong> on the paired device, or drop files anywhere on
-                this window.
+                Hit <strong>Send files</strong> on the paired device
+                {supportsDragDrop ? ", or drop files anywhere on this window." : "."}
               </span>
             </li>
           </ol>

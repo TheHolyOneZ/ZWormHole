@@ -179,9 +179,7 @@ async fn read_json_frame<T: for<'de> Deserialize<'de>>(recv: &mut RecvStream) ->
 }
 
 fn downloads_dir(app: &AppHandle) -> AppResult<PathBuf> {
-    app.path()
-        .download_dir()
-        .map_err(|e| AppError::new(format!("failed to resolve downloads dir: {e}")))
+    crate::platform::default_save_dir(app)
 }
 
 pub fn now_unix_secs() -> u64 {
@@ -631,6 +629,7 @@ pub fn spawn_transfer_acceptor(
                             files
                         };
 
+                        crate::platform::files_saved(&app, &files);
                         let names = files
                             .iter()
                             .filter_map(|p| p.file_name().map(|n| n.to_string_lossy().to_string()))

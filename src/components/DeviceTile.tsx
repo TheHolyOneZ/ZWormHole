@@ -13,6 +13,8 @@ const OS_LABEL: Record<string, string> = {
   windows: "Windows",
   macos: "macOS",
   linux: "Linux",
+  android: "Android",
+  ios: "iOS",
 };
 
 export function DeviceTile({

@@ -117,6 +117,7 @@ interface AppStore {
 
 
   viewMode: "dashboard" | "focus";
+  mobilePane: "devices" | "main";
 
   focusDevice: string | null;
 
@@ -163,6 +164,7 @@ interface AppStore {
   setDashboardSection: (s: string) => void;
   setThisDeviceOpen: (open: boolean) => void;
   setViewMode: (mode: "dashboard" | "focus") => void;
+  setMobilePane: (pane: "devices" | "main") => void;
   setFocusDevice: (deviceKey: string | null) => void;
   setFolderPick: (p: FolderPick | null) => void;
   setDropHoverKey: (key: string | null) => void;
@@ -236,6 +238,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
   dashboardSection: "home",
   thisDeviceOpen: false,
   viewMode: "dashboard",
+  mobilePane: "main",
   focusDevice: null,
   folderPick: null,
   dropHoverKey: null,
@@ -586,7 +589,8 @@ export const useAppStore = create<AppStore>((set, get) => ({
   setBenchmarkTarget: (t) => set({ benchmarkTarget: t }),
   setDashboardSection: (s) => set({ dashboardSection: s }),
   setThisDeviceOpen: (open) => set({ thisDeviceOpen: open }),
-  setViewMode: (mode) => set({ viewMode: mode }),
+  setViewMode: (mode) => set({ viewMode: mode, mobilePane: "main" }),
+  setMobilePane: (pane) => set({ mobilePane: pane }),
   setFocusDevice: (deviceKey) => set({ focusDevice: deviceKey }),
   setFolderPick: (p) => set({ folderPick: p }),
   setDropHoverKey: (key) => set({ dropHoverKey: key }),

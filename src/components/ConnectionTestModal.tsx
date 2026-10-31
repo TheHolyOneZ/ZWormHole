@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { respondToConnectionTest } from "../ipc/commands";
+import { describeError } from "../lib/errors";
 import { formatBytes } from "../lib/format";
 import { useFocusTrap } from "../lib/useFocusTrap";
 import { useAppStore } from "../state/store";
@@ -27,7 +28,7 @@ export function ConnectionTestModal() {
     try {
       await respondToConnectionTest(request!.request_id, accept, accept && remember);
     } catch (e) {
-      pushToast("error", String(e));
+      pushToast("error", describeError(e));
     }
     clear();
   }

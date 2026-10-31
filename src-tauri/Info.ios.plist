@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>NSLocalNetworkUsageDescription</key>
+  <string>ZWormHole finds your other devices and transfers files directly over your local network.</string>
+  <key>NSBonjourServices</key>
+  <array>
+    <string>_zwormhole._tcp</string>
+  </array>
+  <key>UIFileSharingEnabled</key>
+  <true/>
+  <key>LSSupportsOpeningDocumentsInPlace</key>
+  <true/>
+  <key>NSPhotoLibraryUsageDescription</key>
+  <string>ZWormHole lets you pick photos and videos to send to your paired devices.</string>
+</dict>
+</plist>

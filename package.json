@@ -1,7 +1,7 @@
 {
   "name": "zwormhole",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.2.0",
   "packageManager": "pnpm@10.33.0",
   "description": "LAN-first encrypted peer-to-peer file transfer",
   "author": "TheHolyOneZ",
@@ -12,7 +12,9 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "typecheck": "tsc --noEmit",
+    "android:setup": "node scripts/android-setup.mjs"
   },
   "dependencies": {
     "@tauri-apps/api": "^2",

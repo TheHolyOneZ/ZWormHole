@@ -150,10 +150,31 @@ fn natpmp_read<T>(
     Err(AppError::new("NAT-PMP gateway did not respond"))
 }
 
-fn natpmp_add_blocking(internal_port: u16) -> AppResult<WanMapping> {
-    use natpmp::{Natpmp, Protocol as NatProto, Response};
+fn guessed_gateway() -> Option<Ipv4Addr> {
+    let sock = std::net::UdpSocket::bind("0.0.0.0:0").ok()?;
+    sock.connect("192.0.2.1:9").ok()?;
+    match sock.local_addr().ok()?.ip() {
+        IpAddr::V4(v4) if v4.is_private() => {
+            let [a, b, c, _] = v4.octets();
+            Some(Ipv4Addr::new(a, b, c, 1))
+        }
+        _ => None,
+    }
+}
 
-    let mut n = Natpmp::new().map_err(|e| AppError::new(format!("NAT-PMP init: {e:?}")))?;
+fn natpmp_client() -> AppResult<natpmp::Natpmp> {
+    match natpmp::Natpmp::new() {
+        Ok(n) => Ok(n),
+        Err(e) => guessed_gateway()
+            .and_then(|gw| natpmp::Natpmp::new_with(gw).ok())
+            .ok_or_else(|| AppError::new(format!("NAT-PMP init: {e:?}"))),
+    }
+}
+
+fn natpmp_add_blocking(internal_port: u16) -> AppResult<WanMapping> {
+    use natpmp::{Protocol as NatProto, Response};
+
+    let mut n = natpmp_client()?;
 
     n.send_public_address_request()
         .map_err(|e| AppError::new(format!("NAT-PMP address request: {e:?}")))?;
@@ -179,9 +200,9 @@ fn natpmp_add_blocking(internal_port: u16) -> AppResult<WanMapping> {
 }
 
 fn natpmp_remove_blocking(internal_port: u16) -> AppResult<()> {
-    use natpmp::{Natpmp, Protocol as NatProto};
+    use natpmp::Protocol as NatProto;
 
-    let mut n = Natpmp::new().map_err(|e| AppError::new(format!("NAT-PMP init: {e:?}")))?;
+    let mut n = natpmp_client()?;
     n.send_port_mapping_request(NatProto::UDP, internal_port, internal_port, 0)
         .map_err(|e| AppError::new(format!("NAT-PMP unmap: {e:?}")))?;
     Ok(())

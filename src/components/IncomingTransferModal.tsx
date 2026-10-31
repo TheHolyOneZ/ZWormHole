@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
-import { open } from "@tauri-apps/plugin-dialog";
 import { respondToIncomingTransfer } from "../ipc/commands";
+import { describeError } from "../lib/errors";
 import { formatBytes, formatDeviceName } from "../lib/format";
+import { pickSaveDirectory } from "../lib/platform";
 import { useFocusTrap } from "../lib/useFocusTrap";
 import { useAppStore } from "../state/store";
 import type { AutoExtractMode } from "../types/settings";
@@ -58,8 +59,12 @@ export function IncomingTransferModal() {
     formatDeviceName(request.display_name);
 
   async function chooseFolder() {
-    const selected = await open({ directory: true });
-    if (typeof selected === "string") setSaveDir(selected);
+    try {
+      const selected = await pickSaveDirectory(false);
+      if (selected) setSaveDir(selected);
+    } catch (e) {
+      pushToast("error", describeError(e));
+    }
   }
 
   async function respond(accept: boolean) {
@@ -71,7 +76,7 @@ export function IncomingTransferModal() {
         accept && isFolder ? extractMode : undefined,
       );
     } catch (e) {
-      pushToast("error", String(e));
+      pushToast("error", describeError(e));
     }
     setSaveDir(null);
     clear();

@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from "react";
-import { open } from "@tauri-apps/plugin-dialog";
 import {
   readFolderTree,
   runSpeedTest,
@@ -8,6 +7,7 @@ import {
   sendText,
 } from "../ipc/commands";
 import { describeError } from "../lib/errors";
+import { isMobile, os, pickFiles, pickFolder, supportsDragDrop } from "../lib/platform";
 import { deviceLabel } from "../lib/format";
 import { useAppStore } from "../state/store";
 import { Dropdown } from "./Dropdown";
@@ -124,11 +124,9 @@ export function FocusView() {
       .toUpperCase() || "?";
 
   async function pickAndSendFiles() {
-    const selected = await open({ multiple: true, directory: false });
-    if (!selected) return;
-    const paths = Array.isArray(selected) ? selected : [selected];
-    if (paths.length === 0) return;
     try {
+      const paths = await pickFiles();
+      if (paths.length === 0) return;
       await sendFiles(key, paths);
       pushToast("success", `Sending ${paths.length} file${paths.length > 1 ? "s" : ""}`);
     } catch (e) {
@@ -137,10 +135,14 @@ export function FocusView() {
   }
 
   async function pickAndSendFolder() {
-    const selected = await open({ directory: true });
-    if (typeof selected !== "string") return;
-    // Reading a big folder's tree can take a moment on a slow disk — show a
-
+    let selected: string | null;
+    try {
+      selected = await pickFolder();
+    } catch (e) {
+      pushToast("error", describeError(e));
+      return;
+    }
+    if (!selected) return;
     setBusy("Reading folder…");
     try {
       const tree = await readFolderTree(selected);
@@ -302,7 +304,9 @@ export function FocusView() {
           <div className="focusv__block-head">
             <span className="focusv__block-title">Send</span>
             <span className="focusv__block-hint">
-              Drag &amp; drop files or folders anywhere on this page to send
+              {supportsDragDrop
+                ? "Drag & drop files or folders anywhere on this page to send"
+                : "Pick files, a folder or a copied image to send"}
             </span>
           </div>
           <div className="focusv__actions">
@@ -349,9 +353,9 @@ export function FocusView() {
             />
             <div className="focusv__composer-bar">
               <span className="focusv__composer-hint">
-                {text.trim().length > 0 ? (
+                {text.trim().length > 0 && !isMobile ? (
                   <>
-                    <kbd>⌘</kbd>
+                    <kbd>{os === "macos" ? "⌘" : "Ctrl"}</kbd>
                     <kbd>↵</kbd> to send
                   </>
                 ) : (

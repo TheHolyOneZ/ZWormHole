@@ -33,6 +33,7 @@ Pair two devices with a short code, then move anything between them over a direc
   - [Prompts & pop‑ups](#prompts--pop-ups)
 - [Security & privacy](#security--privacy)
 - [Keyboard shortcuts](#keyboard-shortcuts)
+- [On your phone](#on-your-phone)
 - [Running from source](#running-from-source)
 - [Tech stack](#tech-stack)
 - [License](#license)
@@ -41,7 +42,7 @@ Pair two devices with a short code, then move anything between them over a direc
 
 ## What is ZWormHole?
 
-ZWormHole is a desktop app for moving things between devices on your own terms. Two people (or two of your own machines) **pair once by confirming a short code**, and from then on they can send each other files, whole folders, clipboard images and text — directly, peer‑to‑peer.
+ZWormHole is an app for Windows, macOS, Linux, Android and iPhone for moving things between devices on your own terms. Two people (or two of your own machines) **pair once by confirming a short code**, and from then on they can send each other files, whole folders, clipboard images and text — directly, peer‑to‑peer.
 
 Nothing you send ever passes through a company's servers. There is **no rendezvous server, no relay, no cloud storage, and no telemetry** — the app never contacts any outside service at all. Devices find each other on your local network automatically, and you can also connect across networks by IP.
 
@@ -123,11 +124,11 @@ ZWormHole sits alongside excellent tools like [LocalSend](https://localsend.org/
 | Block a device | ✅ | ➖ | ❌ | ❌ | ❌ | ❌ |
 | Open source | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | Desktop (Windows / macOS / Linux) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Mobile (iOS / Android) | ❌ | ✅ | ✅ | ➖ | ➖ | ➖ |
+| Mobile (iOS / Android) | ✅ | ✅ | ✅ | ➖ | ➖ | ➖ |
 
 **What makes ZWormHole stand out:** it's the only one here that reaches a device **across the internet without any relay or cloud server** (it asks your own router to open the path — UPnP/NAT‑PMP), and it's uniquely built for **power users** — fan‑out to several devices at once, live speed graphs, a real benchmark, bandwidth caps, and a plain‑English "what's slowing this transfer" diagnosis.
 
-**Where it's honestly behind:** there's **no mobile app** yet (LocalSend, PairDrop and Warpinator have one), and its serverless internet mode depends on your router supporting UPnP/NAT‑PMP. It's a desktop‑first tool.
+**Where it's honestly behind:** its serverless internet mode depends on your router supporting UPnP/NAT‑PMP, and the iPhone build is sideloaded (no App Store listing yet).
 
 > <sup>†</sup> **On "end‑to‑end encrypted":** every tool here encrypts data in transit, so the ✅ is fair across the board — but the *model* differs. ZWormHole ties its encryption to a **confirmed, persistent device identity**: a password‑authenticated handshake (SPAKE2) over the Noise protocol means you're provably talking to the exact device you paired with, and it's recognized again on reconnect. The code‑based tools (Magic Wormhole, croc) also authenticate with a one‑time code, but keep no lasting identity. LocalSend and PairDrop encrypt the connection (TLS / WebRTC) but don't pin a long‑term device identity in the same way.
 
@@ -286,6 +287,23 @@ Opening **This device** shows how others reach you, and lets you set up your pro
 
 ---
 
+## On your phone
+
+ZWormHole runs on **Android 7+** and **iOS 14+** with the same features as the desktop app: pairing, files, folders, clipboard images, text, history, speed test, benchmark, profiles, trust and blocking. It speaks the same protocol, so a phone pairs with a PC like any other device.
+
+| Platform | File | Notes |
+|---|---|---|
+| 🤖 Android | `ZWormHole_<version>_android.apk` | arm64 + armv7 |
+| 📱 iPhone / iPad | `ZWormHole_<version>_ios_unsigned.ipa` | Install with SideStore / AltStore |
+
+**Android:** download the APK on your phone and tap it. Allow your browser or file manager to *install unknown apps* when asked. Received files go to **Download**. Turn on *Settings → Run in background* to keep receiving while the app is closed; Android then shows a small persistent notification.
+
+**iPhone / iPad:** sideload the unsigned IPA with [SideStore](https://sidestore.io) or AltStore. Allow **Local Network** access when iOS asks, because discovery and transfers depend on it. Received files show up in **Files › On My iPhone › ZWormHole**. iOS pauses apps shortly after you leave them, so keep ZWormHole open for long transfers.
+
+**Phone layout:** the bottom bar switches between *Devices*, *Dashboard*, *Focus* and *Settings*. Long‑press a device or transfer to get the same menu as right‑click on desktop.
+
+---
+
 ## Running from source
 
 ZWormHole is a [Tauri](https://tauri.app) app (Rust backend + web frontend).
@@ -303,16 +321,40 @@ pnpm tauri dev
 pnpm tauri build
 ```
 
+**Android** needs the Android SDK + NDK 27, JDK 17, `ANDROID_HOME` / `NDK_HOME` / `JAVA_HOME`, and the Rust targets:
+
+```bash
+rustup target add aarch64-linux-android armv7-linux-androideabi
+pnpm tauri android init
+pnpm android:setup        # applies release signing if src-tauri/gen/android/keystore.properties exists
+pnpm tauri android build --apk --target aarch64 --target armv7
+```
+
+To sign, put your keystore at `src-tauri/gen/android/release.jks` and a `keystore.properties` (`keyAlias`, `password`, `storeFile`) next to it before running `pnpm android:setup`. In CI the same comes from the `ANDROID_KEYSTORE_B64`, `ANDROID_KEY_PASSWORD` and optional `ANDROID_KEY_ALIAS` secrets.
+
+**iOS** needs macOS with Xcode:
+
+```bash
+rustup target add aarch64-apple-ios aarch64-apple-ios-sim
+pnpm tauri ios init
+pnpm tauri ios dev
+```
+
+The unsigned IPA is built by the `build-ios` job in [`.github/workflows/workflow_2.yml`](.github/workflows/workflow_2.yml). `scripts/ios-unsigned.py` removes code signing from the generated Xcode project.
+
+Platform‑specific native code (pickers, Bonjour, clipboard images, the Android background service and so on) lives in the bundled plugin at [`src-tauri/plugins/zwormhole-mobile`](src-tauri/plugins/zwormhole-mobile).
+
 ---
 
 ## Tech stack
 
-- **[Tauri](https://tauri.app)** — desktop shell (Rust core, web UI)
+- **[Tauri](https://tauri.app)** — app shell for desktop and mobile (Rust core, web UI)
+- **Kotlin / Swift** — small native plugin for Android and iOS integration
 - **React** — user interface
 - **QUIC** (via [quinn](https://github.com/quinn-rs/quinn)) — fast, modern transport
 - **Noise Protocol** (via [snow](https://github.com/mcginty/snow)) — end‑to‑end encryption over QUIC
 - **SPAKE2** — code‑based pairing
-- **mDNS** — automatic local‑network discovery
+- **mDNS / Bonjour** — automatic local‑network discovery
 - **UPnP / NAT‑PMP** — optional, serverless internet reachability
 
 ---

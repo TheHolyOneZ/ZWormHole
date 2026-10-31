@@ -1,18 +1,13 @@
 [package]
 name = "zwormhole"
-version = "0.1.0"
+version = "0.2.0"
 description = "LAN-first encrypted peer-to-peer file transfer"
 authors = ["TheHolyOneZ"]
 license = "GPL-3.0-only"
 homepage = "https://zsync.eu/zwormhole/"
 edition = "2021"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
 [lib]
-# The `_lib` suffix may seem redundant but it is necessary
-# to make the lib name unique and wouldn't conflict with the bin name.
-# This seems to be only an issue on Windows, see https://github.com/rust-lang/cargo/issues/8519
 name = "zwormhole_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
@@ -39,34 +34,21 @@ tauri-plugin-notification = "2"
 zip = { version = "8.6.0", default-features = false, features = ["deflate"] }
 walkdir = "2.5.0"
 hex = "0.4.3"
-# Clipboard image read (send-clipboard-image). arboard's Linux backend is
-# pure-Rust X11/Wayland, so it builds without system C libs; `png` encodes
-# the raw RGBA it hands back into a real file to send.
-arboard = "3"
 png = "0.17"
-# Avatar downscaling for device profiles: decode a user-picked image (png/jpeg)
-# and re-encode a small square PNG so avatars stay a few KB on the wire/disk.
-image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
-# Encode avatar PNGs as data: URLs so the webview can render them directly.
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp", "gif", "bmp"] }
 base64 = "0.22"
-# Serverless WAN reachability: ask the LOCAL router to forward the QUIC port
-# and report the external IP — UPnP-IGD first, NAT-PMP as fallback. Talks only
-# to the gateway on the LAN (no rendezvous/STUN), honoring the no-phone-home
-# rule. See src/portmap.rs and docs/wan-feasibility.md.
 igd-next = { version = "0.15", features = ["aio_tokio"] }
 natpmp = "0.5"
+
+[target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
+arboard = "3"
+
+[target.'cfg(any(target_os = "android", target_os = "ios"))'.dependencies]
+tauri-plugin-zwormhole-mobile = { path = "plugins/zwormhole-mobile" }
 
 [dev-dependencies]
 tempfile = "3.27.0"
 
-# Optimize dependencies even in dev/debug builds. The Noise layer
-# (`snow`'s ChaCha20-Poly1305) encrypts every chunk on both ends of every
-# transfer, and BLAKE3 hashes them; at the default debug opt-level 0 that
-# pure-Rust crypto is slow enough to cap a LAN transfer at a few MB/s while
-# the raw link does hundreds. Building only the *dependencies* optimized
-# keeps app-code rebuilds fast (it stays at opt-level 0) while making the
-# crypto realistic when running `tauri dev`. Release builds are unaffected
-# (already fully optimized).
 [profile.dev.package."*"]
 opt-level = 3
 

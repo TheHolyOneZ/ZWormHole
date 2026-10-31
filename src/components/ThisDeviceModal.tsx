@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import {
   clearMyAvatar,
   disableInternetReachable,
@@ -12,6 +11,7 @@ import {
   setMyDisplayName,
 } from "../ipc/commands";
 import { describeError } from "../lib/errors";
+import { pickImage } from "../lib/platform";
 import { deviceInitials } from "../lib/format";
 import { useAppStore } from "../state/store";
 import type { LocalConnectionInfo } from "../types/localinfo";
@@ -61,7 +61,7 @@ export function ThisDeviceModal() {
     setWanError(null);
     getLocalConnectionInfo()
       .then(setInfo)
-      .catch((e) => setError(String(e)));
+      .catch((e) => setError(describeError(e)));
     getWanStatus()
       .then(setWan)
       .catch(() => setWan(null));
@@ -93,13 +93,11 @@ export function ThisDeviceModal() {
   }
 
   async function pickAvatar() {
-    const selected = await openDialog({
-      multiple: false,
-      directory: false,
-      filters: [{ name: "Image", extensions: ["png", "jpg", "jpeg", "webp", "gif", "bmp"] }],
-    });
-    if (typeof selected !== "string") return;
     try {
+      const selected = await pickImage([
+        { name: "Image", extensions: ["png", "jpg", "jpeg", "webp", "gif", "bmp"] },
+      ]);
+      if (!selected) return;
       await setMyAvatar(selected);
       await reloadProfile();
       pushToast("success", "Avatar updated");

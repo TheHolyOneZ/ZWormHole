@@ -13,10 +13,19 @@ pub fn get_background_listener_enabled(state: State<'_, AppState>) -> AppResult<
 }
 
 #[tauri::command]
-pub fn set_background_listener_enabled(state: State<'_, AppState>, enabled: bool) -> AppResult<()> {
-    state
+pub fn set_background_listener_enabled(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    store: State<'_, SettingsStore>,
+    enabled: bool,
+) -> AppResult<()> {
+    store.set_background_listener(enabled)?;
+    let previous = state
         .background_listener_enabled
-        .store(enabled, Ordering::Relaxed);
+        .swap(enabled, Ordering::Relaxed);
+    if previous != enabled {
+        crate::platform::set_background_service(&app, enabled);
+    }
     Ok(())
 }
 
@@ -43,9 +52,7 @@ pub fn get_transfer_settings(
     store: State<'_, SettingsStore>,
 ) -> AppResult<TransferSettingsPayload> {
     let settings = store.get();
-    let default_save_dir = app
-        .path()
-        .download_dir()
+    let default_save_dir = crate::platform::default_save_dir(&app)
         .ok()
         .map(|p| p.to_string_lossy().to_string());
     Ok(TransferSettingsPayload {
@@ -65,8 +72,22 @@ pub fn set_auto_accept(store: State<'_, SettingsStore>, enabled: bool) -> AppRes
 }
 
 #[tauri::command]
-pub fn set_save_dir(store: State<'_, SettingsStore>, dir: Option<String>) -> AppResult<()> {
-    store.set_save_dir(dir.map(std::path::PathBuf::from))
+pub fn set_save_dir(
+    app: AppHandle,
+    store: State<'_, SettingsStore>,
+    dir: Option<String>,
+) -> AppResult<()> {
+    match dir {
+        Some(dir) => {
+            let dir = std::path::PathBuf::from(dir);
+            crate::platform::ensure_writable_dir(&dir)?;
+            store.set_save_dir(Some(dir))
+        }
+        None => {
+            crate::platform::forget_save_dir(&app);
+            store.set_save_dir(None)
+        }
+    }
 }
 
 #[tauri::command]
@@ -100,7 +121,7 @@ pub async fn set_quic_port(
         discovery.own_fullname.is_some()
     };
     if was_visible {
-        let _ = crate::commands::discovery::stop_visible(app.state::<AppState>()).await;
+        let _ = crate::commands::discovery::stop_visible(app.clone(), app.state::<AppState>()).await;
     }
 
     store.set_quic_port(port)?;

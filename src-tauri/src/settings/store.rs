@@ -37,6 +37,9 @@ pub struct TransferSettings {
 
     #[serde(default)]
     pub quic_port: u16,
+
+    #[serde(default)]
+    pub background_listener: bool,
 }
 
 impl Default for TransferSettings {
@@ -48,6 +51,7 @@ impl Default for TransferSettings {
             max_send_mb_s: 0,
             max_concurrent_sends: 0,
             quic_port: 0,
+            background_listener: false,
         }
     }
 }
@@ -89,6 +93,14 @@ impl SettingsStore {
     pub fn set_auto_accept(&self, enabled: bool) -> AppResult<()> {
         let mut settings = self.get();
         settings.auto_accept = enabled;
+        self.write(&settings)?;
+        *self.cache.write().unwrap() = settings;
+        Ok(())
+    }
+
+    pub fn set_background_listener(&self, enabled: bool) -> AppResult<()> {
+        let mut settings = self.get();
+        settings.background_listener = enabled;
         self.write(&settings)?;
         *self.cache.write().unwrap() = settings;
         Ok(())

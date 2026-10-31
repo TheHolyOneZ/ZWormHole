@@ -1,7 +1,9 @@
 use std::collections::HashMap;
 
+#[cfg(not(target_os = "ios"))]
 use mdns_sd::{ServiceDaemon, ServiceEvent, ServiceInfo};
 
+#[cfg(not(target_os = "ios"))]
 use crate::error::{AppError, AppResult};
 
 pub const SERVICE_TYPE: &str = "_zwormhole._tcp.local.";
@@ -36,23 +38,11 @@ pub struct NearbyDevice {
     pub port: u16,
 }
 
-pub fn current_os_badge() -> &'static str {
-    if cfg!(target_os = "windows") {
-        "windows"
-    } else if cfg!(target_os = "macos") {
-        "macos"
-    } else {
-        "linux"
-    }
+pub fn instance_name(info: &LocalDeviceInfo) -> String {
+    info.fingerprint[..info.fingerprint.len().min(32)].to_string()
 }
 
-
-pub fn advertise(daemon: &ServiceDaemon, info: &LocalDeviceInfo) -> AppResult<String> {
-
-
-    let stable_id = &info.fingerprint[..info.fingerprint.len().min(32)];
-    let host_name = format!("{stable_id}.local.");
-
+pub fn txt_properties(info: &LocalDeviceInfo) -> HashMap<String, String> {
     let mut properties: HashMap<String, String> = HashMap::new();
     properties.insert(TXT_HOSTNAME.to_string(), info.display_name.clone());
     properties.insert(TXT_SESSION_ID.to_string(), info.session_id.clone());
@@ -61,15 +51,22 @@ pub fn advertise(daemon: &ServiceDaemon, info: &LocalDeviceInfo) -> AppResult<St
         TXT_PROTOCOL_VERSION.to_string(),
         PROTOCOL_VERSION.to_string(),
     );
-    properties.insert(TXT_OS.to_string(), current_os_badge().to_string());
+    properties.insert(TXT_OS.to_string(), crate::platform::os_badge().to_string());
+    properties
+}
+
+#[cfg(not(target_os = "ios"))]
+pub fn advertise(daemon: &ServiceDaemon, info: &LocalDeviceInfo) -> AppResult<String> {
+    let stable_id = instance_name(info);
+    let host_name = format!("{stable_id}.local.");
 
     let service = ServiceInfo::new(
         SERVICE_TYPE,
-        stable_id,
+        &stable_id,
         &host_name,
         "",
         info.port,
-        properties,
+        txt_properties(info),
     )
     .map_err(|e| AppError::new(format!("failed to build mDNS service info: {e}")))?
     .enable_addr_auto();
@@ -83,6 +80,7 @@ pub fn advertise(daemon: &ServiceDaemon, info: &LocalDeviceInfo) -> AppResult<St
     Ok(fullname)
 }
 
+#[cfg(not(target_os = "ios"))]
 pub fn stop_advertising(daemon: &ServiceDaemon, fullname: &str) -> AppResult<()> {
     daemon
         .unregister(fullname)
@@ -91,12 +89,14 @@ pub fn stop_advertising(daemon: &ServiceDaemon, fullname: &str) -> AppResult<()>
 }
 
 
+#[cfg(not(target_os = "ios"))]
 pub fn browse(daemon: &ServiceDaemon) -> AppResult<mdns_sd::Receiver<ServiceEvent>> {
     daemon
         .browse(SERVICE_TYPE)
         .map_err(|e| AppError::new(format!("failed to browse for mDNS services: {e}")))
 }
 
+#[cfg(not(target_os = "ios"))]
 pub fn stop_browsing(daemon: &ServiceDaemon) -> AppResult<()> {
     daemon
         .stop_browse(SERVICE_TYPE)
@@ -104,31 +104,41 @@ pub fn stop_browsing(daemon: &ServiceDaemon) -> AppResult<()> {
 }
 
 
-pub fn decode_resolved(resolved: &mdns_sd::ResolvedService) -> Option<NearbyDevice> {
-    let hostname = resolved.txt_properties.get_property_val_str(TXT_HOSTNAME)?;
-    let session_id = resolved
-        .txt_properties
-        .get_property_val_str(TXT_SESSION_ID)?;
-    let fingerprint = resolved
-        .txt_properties
-        .get_property_val_str(TXT_FINGERPRINT)?;
-    let protocol_version = resolved
-        .txt_properties
-        .get_property_val_str(TXT_PROTOCOL_VERSION)
-        .unwrap_or("unknown");
-    let os = resolved
-        .txt_properties
-        .get_property_val_str(TXT_OS)
-        .unwrap_or("unknown");
+pub fn decode_parts(
+    fullname: &str,
+    get: impl Fn(&str) -> Option<String>,
+    addresses: Vec<std::net::IpAddr>,
+    port: u16,
+) -> Option<NearbyDevice> {
+    let hostname = get(TXT_HOSTNAME)?;
+    let session_id = get(TXT_SESSION_ID)?;
+    let fingerprint = get(TXT_FINGERPRINT)?;
+    let protocol_version = get(TXT_PROTOCOL_VERSION).unwrap_or_else(|| "unknown".to_string());
+    let os = get(TXT_OS).unwrap_or_else(|| "unknown".to_string());
 
     Some(NearbyDevice {
-        fullname: resolved.fullname.clone(),
-        hostname: hostname.to_string(),
-        session_id: session_id.to_string(),
-        fingerprint: fingerprint.to_string(),
-        protocol_version: protocol_version.to_string(),
-        os: os.to_string(),
-        addresses: resolved.addresses.iter().map(|a| a.to_ip_addr()).collect(),
-        port: resolved.port,
+        fullname: fullname.to_string(),
+        hostname,
+        session_id,
+        fingerprint,
+        protocol_version,
+        os,
+        addresses,
+        port,
     })
+}
+
+#[cfg(not(target_os = "ios"))]
+pub fn decode_resolved(resolved: &mdns_sd::ResolvedService) -> Option<NearbyDevice> {
+    decode_parts(
+        &resolved.fullname,
+        |key| {
+            resolved
+                .txt_properties
+                .get_property_val_str(key)
+                .map(str::to_string)
+        },
+        resolved.addresses.iter().map(|a| a.to_ip_addr()).collect(),
+        resolved.port,
+    )
 }

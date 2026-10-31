@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useState } from "react";
-import { save } from "@tauri-apps/plugin-dialog";
 import {
   clearTransferHistory,
   listTransferHistory,
@@ -8,7 +7,9 @@ import {
   saveTextFile,
   sendFiles,
 } from "../ipc/commands";
+import { describeError } from "../lib/errors";
 import { formatBytes, formatDeviceName, formatTimestamp } from "../lib/format";
+import { exportTextFile } from "../lib/platform";
 import { useAppStore } from "../state/store";
 import type { HistoryEntry } from "../types/history";
 
@@ -29,7 +30,7 @@ export function HistoryPane() {
       await sendFiles(deviceKey, paths);
       pushToast("success", `Re-sending ${paths.length} file${paths.length === 1 ? "" : "s"}`);
     } catch (e) {
-      pushToast("error", String(e));
+      pushToast("error", describeError(e));
     }
   }
 
@@ -37,7 +38,7 @@ export function HistoryPane() {
     try {
       setEntries(await listTransferHistory());
     } catch (e) {
-      pushToast("error", String(e));
+      pushToast("error", describeError(e));
     }
   }, [pushToast]);
 
@@ -50,17 +51,12 @@ export function HistoryPane() {
       await clearTransferHistory();
       setEntries([]);
     } catch (e) {
-      pushToast("error", String(e));
+      pushToast("error", describeError(e));
     }
   }
 
   async function exportCsv(rows: HistoryEntry[]) {
     try {
-      const path = await save({
-        defaultPath: "zwormhole-history.csv",
-        filters: [{ name: "CSV", extensions: ["csv"] }],
-      });
-      if (!path) return;
       const esc = (v: string) => `"${v.replace(/"/g, '""')}"`;
       const header = "date,direction,device,files,bytes";
       const lines = rows.map((e) =>
@@ -72,10 +68,16 @@ export function HistoryPane() {
           String(e.total_bytes),
         ].join(","),
       );
-      await saveTextFile(path, [header, ...lines].join("\n"));
-      pushToast("success", "History exported");
+      const saved = await exportTextFile(
+        "zwormhole-history.csv",
+        [header, ...lines].join("\n"),
+        [{ name: "CSV", extensions: ["csv"] }],
+        "text/csv",
+        saveTextFile,
+      );
+      if (saved) pushToast("success", "History exported");
     } catch (e) {
-      pushToast("error", String(e));
+      pushToast("error", describeError(e));
     }
   }
 

@@ -1,7 +1,7 @@
 import { useState } from "react";
-import { open } from "@tauri-apps/plugin-dialog";
 import { readFolderTree, sendFilesMulti } from "../ipc/commands";
 import { describeError } from "../lib/errors";
+import { pickFiles, pickFolder } from "../lib/platform";
 import { formatDeviceName } from "../lib/format";
 import { useAppStore } from "../state/store";
 
@@ -35,9 +35,13 @@ export function MultiSendBar() {
   }
 
   async function sendFilesToTargets() {
-    const sel = await open({ multiple: true, directory: false });
-    if (!sel) return;
-    const paths = Array.isArray(sel) ? sel : [sel];
+    let paths: string[];
+    try {
+      paths = await pickFiles();
+    } catch (e) {
+      pushToast("error", describeError(e));
+      return;
+    }
     if (paths.length === 0) return;
     try {
       const r = await sendFilesMulti(targetKeys, paths);
@@ -54,9 +58,9 @@ export function MultiSendBar() {
   }
 
   async function sendFolderToTargets() {
-    const sel = await open({ directory: true });
-    if (typeof sel !== "string") return;
     try {
+      const sel = await pickFolder();
+      if (!sel) return;
       const tree = await readFolderTree(sel);
       setFolderPick({
         deviceKey: targetKeys[0],

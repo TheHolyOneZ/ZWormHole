@@ -14,6 +14,7 @@ use crate::transfer::queue::TransferQueue;
 
 #[derive(Default)]
 pub struct DiscoveryState {
+    #[cfg_attr(target_os = "ios", allow(dead_code))]
     pub daemon: Option<ServiceDaemon>,
 
 

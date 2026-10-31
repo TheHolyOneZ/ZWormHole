@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import { save } from "@tauri-apps/plugin-dialog";
 import {
   exportBenchmark,
   listBenchmarkHistory,
@@ -7,6 +6,7 @@ import {
   runBenchmark,
 } from "../ipc/commands";
 import { describeError } from "../lib/errors";
+import { exportTextFile } from "../lib/platform";
 import { formatBytes, formatDuration, formatMbps, formatTimestamp } from "../lib/format";
 import { useAppStore } from "../state/store";
 import type {
@@ -120,11 +120,6 @@ export function BenchmarkModal() {
   async function exportJson() {
     if (!result) return;
     const stamp = new Date().toISOString().replace(/[:.]/g, "-");
-    const path = await save({
-      defaultPath: `zwormhole-benchmark-${target!.displayName}-${stamp}.json`,
-      filters: [{ name: "JSON", extensions: ["json"] }],
-    });
-    if (typeof path !== "string") return;
     const report = {
       generated_at: new Date().toISOString(),
       peer: target!.displayName,
@@ -133,8 +128,14 @@ export function BenchmarkModal() {
       ...result,
     };
     try {
-      await exportBenchmark(path, JSON.stringify(report, null, 2));
-      pushToast("success", "Benchmark exported");
+      const saved = await exportTextFile(
+        `zwormhole-benchmark-${target!.displayName}-${stamp}.json`,
+        JSON.stringify(report, null, 2),
+        [{ name: "JSON", extensions: ["json"] }],
+        "application/json",
+        exportBenchmark,
+      );
+      if (saved) pushToast("success", "Benchmark exported");
     } catch (e) {
       pushToast("error", describeError(e));
     }

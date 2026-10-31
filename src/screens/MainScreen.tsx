@@ -18,11 +18,14 @@ import { TextReceivedModal } from "../components/TextReceivedModal";
 import { ThisDeviceModal } from "../components/ThisDeviceModal";
 import { TransferDetailModal } from "../components/TransferDetailModal";
 import { TrustedPane } from "../components/TrustedPane";
+import { MobileNav } from "../components/MobileNav";
+import { isMobile, supportsDragDrop } from "../lib/platform";
 import { useAppStore } from "../state/store";
 
 export function MainScreen() {
   const initialize = useAppStore((s) => s.initialize);
   const viewMode = useAppStore((s) => s.viewMode);
+  const mobilePane = useAppStore((s) => s.mobilePane);
 
   useEffect(() => {
     void initialize();
@@ -65,7 +68,7 @@ export function MainScreen() {
   }, []);
 
   return (
-    <div className="app-shell">
+    <div className="app-shell" data-pane={mobilePane}>
       <TopBar />
       <div className="app-shell__body">
         <aside className="sidebar">
@@ -89,7 +92,8 @@ export function MainScreen() {
       <SettingsPanel />
       <ToastStack />
       <BusyOverlay />
-      <DropZoneOverlay />
+      {supportsDragDrop && <DropZoneOverlay />}
+      {isMobile && <MobileNav />}
     </div>
   );
 }

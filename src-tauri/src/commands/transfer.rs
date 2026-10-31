@@ -539,32 +539,6 @@ async fn do_send_folder(
 }
 
 
-fn clipboard_image_to_png() -> AppResult<PathBuf> {
-    let mut clipboard = arboard::Clipboard::new()
-        .map_err(|e| AppError::new(format!("clipboard unavailable: {e}")))?;
-    let image = clipboard
-        .get_image()
-        .map_err(|e| AppError::new(format!("no image in the clipboard: {e}")))?;
-    let path = std::env::temp_dir().join(format!("zwormhole-clip-{}.png", uuid::Uuid::new_v4()));
-    let file = std::fs::File::create(&path)
-        .map_err(|e| AppError::new(format!("failed to create temp image: {e}")))?;
-    let mut encoder = png::Encoder::new(
-        std::io::BufWriter::new(file),
-        image.width as u32,
-        image.height as u32,
-    );
-    encoder.set_color(png::ColorType::Rgba);
-    encoder.set_depth(png::BitDepth::Eight);
-    let mut writer = encoder
-        .write_header()
-        .map_err(|e| AppError::new(format!("failed to write png header: {e}")))?;
-    writer
-        .write_image_data(&image.bytes)
-        .map_err(|e| AppError::new(format!("failed to encode png: {e}")))?;
-    Ok(path)
-}
-
-
 #[tauri::command]
 pub async fn send_clipboard_image(
     app: AppHandle,
@@ -572,9 +546,7 @@ pub async fn send_clipboard_image(
     device_key: String,
 ) -> AppResult<TransferJob> {
     let (connection, secret) = peer_connection(&state, &device_key).await?;
-    let png_path = tokio::task::spawn_blocking(clipboard_image_to_png)
-        .await
-        .map_err(|e| AppError::new(format!("clipboard task failed: {e}")))??;
+    let png_path = crate::platform::clipboard_image(&app).await?;
 
     let base_dir = png_path
         .parent()

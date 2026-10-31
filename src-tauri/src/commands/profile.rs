@@ -84,7 +84,7 @@ pub async fn refresh_advertisement(app: AppHandle) -> AppResult<()> {
         discovery.own_fullname.is_some()
     };
     if was_visible {
-        let _ = crate::commands::discovery::stop_visible(app.state()).await;
+        let _ = crate::commands::discovery::stop_visible(app.clone(), app.state()).await;
         let _ = crate::commands::discovery::become_visible(app.clone(), app.state()).await;
     }
     Ok(())

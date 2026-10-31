@@ -1,4 +1,5 @@
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { isMobile } from "../lib/platform";
 import { useAppStore } from "../state/store";
 import { DownloadsTray } from "./DownloadsTray";
 import { WormholeMark } from "./WormholeMark";
@@ -83,7 +84,7 @@ export function TopBar() {
 
       <div className="top-bar__right">
         <DownloadsTray />
-        <WindowControls />
+        {!isMobile && <WindowControls />}
       </div>
     </header>
   );

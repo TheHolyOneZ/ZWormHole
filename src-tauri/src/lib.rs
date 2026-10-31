@@ -9,6 +9,7 @@ mod history;
 mod identity;
 mod net;
 mod pairing;
+mod platform;
 mod profile;
 mod settings;
 mod state;
@@ -16,18 +17,29 @@ mod bench_history;
 mod portmap;
 mod transfer;
 mod transport;
+#[cfg(desktop)]
 mod tray;
 mod trusted;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
+    let builder = tauri::Builder::default();
+    #[cfg(mobile)]
+    let builder = builder.plugin(tauri_plugin_zwormhole_mobile::init());
+    builder
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_notification::init())
         .manage(state::AppState::default())
         .setup(|app| {
             let app_data_dir = app.path().app_data_dir()?;
+            #[cfg(target_os = "android")]
+            if let Ok(cache) = app.path().app_cache_dir() {
+                let tmp = cache.join("tmp");
+                if std::fs::create_dir_all(&tmp).is_ok() {
+                    std::env::set_var("TMPDIR", &tmp);
+                }
+            }
             let store_path = trusted::store::default_store_path(&app_data_dir);
             app.manage(trusted::store::TrustedStore::new(store_path));
             let blocked_path = blocked::default_store_path(&app_data_dir);
@@ -37,7 +49,9 @@ pub fn run() {
                 &app_data_dir,
             )));
             let settings_path = settings::store::default_settings_path(&app_data_dir);
-            app.manage(settings::store::SettingsStore::new(settings_path));
+            let settings_store = settings::store::SettingsStore::new(settings_path);
+            let background_listener = settings_store.get().background_listener;
+            app.manage(settings_store);
             let history_path = history::store::default_store_path(&app_data_dir);
             app.manage(history::store::HistoryStore::new(history_path));
             let queue_store_path = transfer::queue_store::default_store_path(&app_data_dir);
@@ -46,23 +60,33 @@ pub fn run() {
             app.manage(bench_history::BenchHistoryStore::new(bench_history_path));
             let device_identity = identity::load_or_create(&app_data_dir)?;
             app.manage(device_identity);
+            platform::init(app.handle());
+            if background_listener {
+                app.state::<state::AppState>()
+                    .background_listener_enabled
+                    .store(true, std::sync::atomic::Ordering::Relaxed);
+                platform::set_background_service(app.handle(), true);
+            }
+            #[cfg(desktop)]
             tray::build_tray(app.handle())?;
             Ok(())
         })
         .on_window_event(|window, event| {
-            if window.label() != "main" {
-                return;
-            }
-            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
-                let state = window.state::<state::AppState>();
-                let background_enabled = state
-                    .background_listener_enabled
-                    .load(std::sync::atomic::Ordering::Relaxed);
-                if background_enabled {
-                    api.prevent_close();
-                    let _ = window.hide();
+            #[cfg(desktop)]
+            if window.label() == "main" {
+                if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                    let state = window.state::<state::AppState>();
+                    let background_enabled = state
+                        .background_listener_enabled
+                        .load(std::sync::atomic::Ordering::Relaxed);
+                    if background_enabled {
+                        api.prevent_close();
+                        let _ = window.hide();
+                    }
                 }
             }
+            #[cfg(mobile)]
+            let _ = (window, event);
         })
         .invoke_handler(tauri::generate_handler![
             commands::ping,
@@ -110,6 +134,11 @@ pub fn run() {
             commands::transfer::list_benchmark_history,
             commands::transfer::clear_benchmark_history,
             commands::transfer::respond_to_connection_test,
+            commands::system::platform_info,
+            commands::system::pick_files,
+            commands::system::pick_folder,
+            commands::system::pick_save_dir,
+            commands::system::export_text_file,
             commands::system::open_external_url,
             commands::system::open_path,
             commands::system::reveal_path,
@@ -136,8 +165,6 @@ pub fn run() {
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
         .run(|app_handle, event| {
-
-
             if let tauri::RunEvent::Exit = event {
                 let app = app_handle.clone();
                 tauri::async_runtime::block_on(async move {

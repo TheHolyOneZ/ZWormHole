@@ -1,6 +1,5 @@
 import { useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { open } from "@tauri-apps/plugin-dialog";
 import {
   readFolderTree,
   revokeTrustedDevice,
@@ -12,6 +11,7 @@ import {
   setDeviceNickname,
 } from "../ipc/commands";
 import { describeError } from "../lib/errors";
+import { pickFiles, pickFolder } from "../lib/platform";
 import { deviceInitials, deviceLabel, formatExpiry } from "../lib/format";
 import { useAppStore } from "../state/store";
 import type { TrustedDevicePayload } from "../types/trusted";
@@ -113,18 +113,16 @@ export function DeviceRow({
     }
   }
 
-  async function pickFiles() {
-    const sel = await open({ multiple: true, directory: false });
-    if (!sel) return;
-    const paths = Array.isArray(sel) ? sel : [sel];
+  async function chooseFiles() {
+    const paths = await pickFiles();
     if (paths.length === 0) return;
     await sendFiles(fp, paths);
     pushToast("success", `Sending ${paths.length} file${paths.length > 1 ? "s" : ""} to ${label}`);
   }
 
-  async function pickFolder() {
-    const sel = await open({ directory: true });
-    if (typeof sel !== "string") return;
+  async function chooseFolder() {
+    const sel = await pickFolder();
+    if (!sel) return;
     const tree = await readFolderTree(sel);
     setFolderPick({ deviceKey: fp, displayName: label, folderPath: sel, tree });
   }
@@ -292,10 +290,10 @@ export function DeviceRow({
               >
                 {connected ? (
               <>
-                <button className="side-menu__item" onClick={() => void run(pickFiles)}>
+                <button className="side-menu__item" onClick={() => void run(chooseFiles)}>
                   Send files
                 </button>
-                <button className="side-menu__item" onClick={() => void run(pickFolder)}>
+                <button className="side-menu__item" onClick={() => void run(chooseFolder)}>
                   Send folder
                 </button>
                 <button className="side-menu__item" onClick={() => void run(sendImage)}>

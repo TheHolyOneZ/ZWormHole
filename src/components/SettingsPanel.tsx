@@ -1,5 +1,4 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
-import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import {
   getBackgroundListenerEnabled,
   getTransferSettings,
@@ -12,6 +11,7 @@ import {
   setSaveDir,
 } from "../ipc/commands";
 import { describeError } from "../lib/errors";
+import { os, pickSaveDirectory, saveLocationLabel } from "../lib/platform";
 import type { AutoExtractMode } from "../types/settings";
 import { useAppStore } from "../state/store";
 import { Dropdown } from "./Dropdown";
@@ -144,10 +144,13 @@ export function SettingsPanel() {
   }
 
   async function chooseSaveDir() {
-    const selected = await openDialog({ directory: true });
-    if (typeof selected === "string") {
+    try {
+      const selected = await pickSaveDirectory(true);
+      if (!selected) return;
       await setSaveDir(selected);
       setSaveDirState(selected);
+    } catch (e) {
+      pushToast("error", describeError(e));
     }
   }
 
@@ -246,7 +249,9 @@ export function SettingsPanel() {
                 <div className="setx__text">
                   <span className="setx__row-title">Save incoming files to</span>
                   <ExpandableText>
-                    {saveDir ? saveDir : `Default · ${defaultSaveDir ?? "Downloads"}`}
+                    {saveDir
+                      ? saveDir
+                      : `Default · ${os === "ios" ? saveLocationLabel : (defaultSaveDir ?? saveLocationLabel)}`}
                   </ExpandableText>
                 </div>
                 <div className="setx__ctl">
@@ -290,17 +295,22 @@ export function SettingsPanel() {
                 <div className="setx__text">
                   <span className="setx__row-title">Run in background</span>
                   <ExpandableText>
-                    Keep listening for requests when the window is closed. A tray icon stays available
-                    to reopen or quit.
+                    {os === "android"
+                      ? "Keep receiving while ZWormHole is in the background. Android shows a persistent notification while this is on."
+                      : os === "ios"
+                        ? "iOS pauses apps shortly after you leave them. Transfers in progress get a short grace period to finish — keep ZWormHole open for longer transfers."
+                        : "Keep listening for requests when the window is closed. A tray icon stays available to reopen or quit."}
                   </ExpandableText>
                 </div>
-                <div className="setx__ctl">
-                  <Switch
-                    label=""
-                    checked={backgroundListener}
-                    onChange={() => void toggleBackgroundListener()}
-                  />
-                </div>
+                {os !== "ios" ? (
+                  <div className="setx__ctl">
+                    <Switch
+                      label=""
+                      checked={backgroundListener}
+                      onChange={() => void toggleBackgroundListener()}
+                    />
+                  </div>
+                ) : null}
               </div>
 
               <div className="setx__row">

@@ -53,8 +53,6 @@ export function PairingModal() {
           <button
             className="pairing-modal__block"
             onClick={() => {
-              // Reject the request, then block the fingerprint so this device
-              // can't prompt again.
               confirmPairingCode(incoming.request_id, false).catch(() => {});
               void blockDevice(incoming.requester_fingerprint, incoming.requester_name).catch((e) =>
                 pushToast("error", describeError(e)),

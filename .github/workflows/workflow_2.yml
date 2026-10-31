@@ -18,7 +18,8 @@ on:
       - "pnpm-lock.yaml"
       - "vite.config.ts"
       - "tsconfig.json"
-      - ".github/workflows/build.yml"
+      - "scripts/**"
+      - ".github/workflows/workflow_2.yml"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -293,9 +294,162 @@ jobs:
           fail_on_unmatched_files: true
 
 
+  build-android:
+    name: Android (arm64 + armv7)
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android/sdk/ndk /opt/ghc /usr/local/.ghcup /usr/share/swift /usr/local/share/boost /opt/hostedtoolcache/CodeQL
+          sudo docker image prune --all --force > /dev/null
+          df -h /
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Set up Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Install Android NDK
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "ndk;27.2.12479018" "platforms;android-36" "build-tools;35.0.0"
+          echo "NDK_HOME=$ANDROID_HOME/ndk/27.2.12479018" >> "$GITHUB_ENV"
+
+      - name: Set up Rust (stable)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android,armv7-linux-androideabi
+
+      - name: Rust build cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
+          workspaces: src-tauri
+          key: android
+
+      - name: Install frontend dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Init Android project
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        run: |
+          pnpm tauri android init --ci
+          pnpm tauri icon src-tauri/icons/source-1024.png
+          if [ -n "$KEYSTORE_B64" ]; then
+            echo "$KEYSTORE_B64" | base64 -d > src-tauri/gen/android/release.jks
+            printf 'keyAlias=%s\npassword=%s\nstoreFile=release.jks\n' "${KEY_ALIAS:-zwormhole}" "$KEY_PASSWORD" > src-tauri/gen/android/keystore.properties
+          else
+            echo "::warning::ANDROID_KEYSTORE_B64 is not set – signing with a throwaway key. Users must uninstall before updating to a build signed with a different key."
+            keytool -genkeypair -v -keystore src-tauri/gen/android/release.jks -alias zwormhole -keyalg RSA -keysize 4096 -validity 10000 \
+              -storepass zwormhole-ci -keypass zwormhole-ci -dname "CN=ZWormHole, O=TheHolyOneZ"
+            printf 'keyAlias=zwormhole\npassword=zwormhole-ci\nstoreFile=release.jks\n' > src-tauri/gen/android/keystore.properties
+          fi
+          pnpm android:setup
+
+      - name: Build — APK
+        run: pnpm tauri android build --apk --target aarch64 --target armv7
+
+      - name: Rename APK
+        run: |
+          V=$(node -p "require('./package.json').version")
+          APK=$(find src-tauri/gen/android/app/build/outputs/apk -name "*-release.apk" | head -1)
+          if [ -z "$APK" ]; then echo "no release APK found"; exit 1; fi
+          mkdir -p dist-mobile
+          cp "$APK" "dist-mobile/ZWormHole_${V}_android.apk"
+          ls -la dist-mobile
+
+      - name: Publish Android APK to the release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.RELEASE_TAG }}
+          files: dist-mobile/*.apk
+          fail_on_unmatched_files: true
+
+
+  build-ios:
+    name: iOS (unsigned IPA)
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Set up Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Set up Rust (stable)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-ios
+
+      - name: Rust build cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
+          workspaces: src-tauri
+          key: ios
+
+      - name: Install frontend dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Init iOS project without code signing
+        run: |
+          pnpm tauri ios init --ci
+          pnpm tauri icon src-tauri/icons/source-1024.png
+          printf 'CODE_SIGNING_ALLOWED = NO\nCODE_SIGNING_REQUIRED = NO\nCODE_SIGN_IDENTITY =\nCODE_SIGN_ENTITLEMENTS =\nDEVELOPMENT_TEAM =\nPROVISIONING_PROFILE_SPECIFIER =\n' > "$RUNNER_TEMP/unsigned.xcconfig"
+          echo "XCODE_XCCONFIG_FILE=$RUNNER_TEMP/unsigned.xcconfig" >> "$GITHUB_ENV"
+          python3 scripts/ios-unsigned.py
+
+      - name: Build — iPhone (unsigned)
+        run: |
+          python3 scripts/ios-unsigned.py
+          pnpm tauri ios build --target aarch64 --ci || true
+
+      - name: Package unsigned IPA
+        run: |
+          V=$(node -p "require('./package.json').version")
+          APP=$(find src-tauri/gen/apple ~/Library/Developer/Xcode/DerivedData -type d -name "*.app" -path "*-iphoneos/*" 2>/dev/null | head -1)
+          if [ -z "$APP" ] || [ ! -f "$APP/Info.plist" ]; then echo "no complete .app found"; exit 1; fi
+          echo "app: $APP"
+          mkdir -p ipa/Payload dist-mobile
+          cp -R "$APP" ipa/Payload/
+          (cd ipa && zip -qr "../dist-mobile/ZWormHole_${V}_ios_unsigned.ipa" Payload)
+          ls -la dist-mobile
+
+      - name: Publish iOS IPA to the release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.RELEASE_TAG }}
+          files: dist-mobile/*.ipa
+          fail_on_unmatched_files: true
+
+
   checksums:
     name: Generate SHA-256 checksums
-    needs: [build-windows, build-macos-intel, build-macos-silicon, build-linux]
+    needs: [build-windows, build-macos-intel, build-macos-silicon, build-linux, build-android, build-ios]
     runs-on: ubuntu-22.04
     if: always() && !cancelled()
     permissions:
@@ -310,9 +464,10 @@ jobs:
           gh release download "$RELEASE_TAG" -R "$GITHUB_REPOSITORY" \
             --pattern '*.exe' --pattern '*.msi' --pattern '*.dmg' \
             --pattern '*.deb' --pattern '*.rpm' --pattern '*.AppImage' \
+            --pattern '*.apk' --pattern '*.ipa' \
             --clobber
           echo "=== release/ ==="
           ls -lah
-          (sha256sum *.msi *.exe *.dmg *.deb *.rpm *.AppImage 2>/dev/null || true) > SHA256SUMS.txt
+          (sha256sum *.msi *.exe *.dmg *.deb *.rpm *.AppImage *.apk *.ipa 2>/dev/null || true) > SHA256SUMS.txt
           cat SHA256SUMS.txt
           gh release upload "$RELEASE_TAG" SHA256SUMS.txt -R "$GITHUB_REPOSITORY" --clobber
