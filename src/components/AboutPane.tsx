@@ -5,7 +5,7 @@ import { describeError } from "../lib/errors";
 import { useAppStore } from "../state/store";
 import { WormholeMark } from "./WormholeMark";
 
-const FALLBACK_VERSION = "0.2.0";
+const FALLBACK_VERSION = "0.2.1";
 
 
 const svg = {

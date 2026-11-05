@@ -15,7 +15,7 @@ export function useFocusTrap(ref: RefObject<HTMLElement | null>, active = true) 
 
     const list = focusables();
 
-    (list.find((n) => n.classList.contains("btn--accent")) ?? list[0])?.focus();
+    (list.find((n) => n.classList.contains("btn--accent")) ?? list[0])?.focus({ preventScroll: true });
 
     function onKey(e: KeyboardEvent) {
       if (e.key !== "Tab") return;

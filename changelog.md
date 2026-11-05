@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.2.1 — 2026-11-05
+
+Bug-fix release for phones, based on [issue #1](https://github.com/TheHolyOneZ/ZWormHole/issues/1). Thanks to @cclafeer for the report and the screen recording.
+
+### Fixes — Android & iOS
+
+- **The status bar was invisible when the phone was in light mode.** Android drew dark icons on ZWormHole's dark background, so the clock, battery and signal seemed to be gone. The status and navigation bars now always use light icons. iPhones had the same problem, and ZWormHole now always uses the dark system style there.
+- **White squares appeared at the edges of the screen.** They were unstyled scrollbar corners. They're now transparent, and the sideways scrolling that caused them is gone.
+- **Dashboard and Focus could be dragged sideways.** A decorative background glow and the hidden encryption popup were both wider than a phone screen, which added extra horizontal scrollbars and a second vertical one. Both now stay within the screen.
+- **The Focus header overlapped.** *Encrypted* ran into the benchmark and speed-test buttons on narrow screens. The buttons now have their own full-width row, which also makes them easier to tap.
+- **Settings rows were squeezed.** *Received folders* had its description crushed to a few letters behind the dropdown, and other rows wrapped badly. Controls now move below the text when there isn't room.
+- **Very small screens.** The Dashboard stats, the folder picker toolbar, the benchmark controls and the *This device* dialog no longer run off the edge on small phones or with larger text. Checked at screen sizes from 280px wide up, matching small Android phones and iPhones from the SE to the 14, in portrait and landscape.
+- **Dialogs could open scrolled down.** On short screens the incoming-transfer, pairing and connection-test dialogs jumped to the Accept button, which hid who was asking. They now open at the top, so you always see the sender first.
+- **Dialogs on older phones** now stay within the screen on system WebViews and iOS versions that don't support newer CSS units.
+
+### Fixes — Desktop
+
+- The same glow and popup fixes apply to small desktop windows, which could also show a sideways scrollbar.
+
 ## 0.2.0 — 2026-10-31
 
 ZWormHole now runs on **Android** and **iPhone/iPad** — same app, same code base, same encrypted Noise-over-QUIC protocol. A phone pairs and transfers with Windows, macOS and Linux exactly like any other device.

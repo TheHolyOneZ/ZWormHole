@@ -275,7 +275,7 @@ export function SettingsPanel() {
                     auto-accept is on for the sender, it's applied automatically.
                   </ExpandableText>
                 </div>
-                <div className="setx__ctl">
+                <div className="setx__ctl setx__ctl--wide">
                   <Dropdown
                     className="setx__extract"
                     options={EXTRACT_OPTIONS}

@@ -27,6 +27,8 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
 import app.tauri.annotation.ActivityCallback
 import app.tauri.annotation.Command
 import app.tauri.annotation.InvokeArg
@@ -85,6 +87,7 @@ class ZWormHoleMobilePlugin(private val activity: Activity) : Plugin(activity) {
 
     override fun load(webView: WebView) {
         super.load(webView)
+        showLightSystemBars()
         try {
             val wifi = activity.applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
             multicastLock = wifi.createMulticastLock("zwormhole-discovery").apply {
@@ -97,6 +100,21 @@ class ZWormHoleMobilePlugin(private val activity: Activity) : Plugin(activity) {
             ContextCompat.checkSelfPermission(activity, Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED
         ) {
             ActivityCompat.requestPermissions(activity, arrayOf(Manifest.permission.WRITE_EXTERNAL_STORAGE), 4711)
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        showLightSystemBars()
+    }
+
+    private fun showLightSystemBars() {
+        activity.runOnUiThread {
+            val window = activity.window
+            val bars = WindowCompat.getInsetsController(window, window.decorView)
+            bars.show(WindowInsetsCompat.Type.systemBars())
+            bars.isAppearanceLightStatusBars = false
+            bars.isAppearanceLightNavigationBars = false
         }
     }
 
